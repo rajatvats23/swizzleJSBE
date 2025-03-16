@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 // Load environment variables
 dotenv.config();
@@ -14,6 +15,13 @@ const app = express();
 
 // Middleware for parsing JSON
 app.use(express.json());
+
+app.use(cors({
+  origin: ['http://localhost:4300'], // Your frontend URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 // Mount routes
 app.use('/api/auth', authRoutes);
