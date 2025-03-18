@@ -109,7 +109,7 @@ const inviteAdmin = async (req, res) => {
     await user.save();
 
     // Create invite URL
-    const inviteUrl = `${process.env.CLIENT_URL}/register/${inviteToken}`;
+    const inviteUrl = `${process.env.CLIENT_URL}/auth/register/${inviteToken}`;
 
     // Send email using SendGrid
     const msg = {
