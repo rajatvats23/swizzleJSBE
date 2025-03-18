@@ -109,7 +109,7 @@ const inviteAdmin = async (req, res) => {
     await user.save();
 
     // Create invite URL
-    const inviteUrl = `${process.env.CLIENT_URL}/signup/${inviteToken}`;
+    const inviteUrl = `${process.env.CLIENT_URL}/register/${inviteToken}`;
 
     // Send email using SendGrid
     const msg = {
@@ -209,9 +209,66 @@ const createSuperAdmin = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      return sendResponse(res, 404, 'fail', 'User not found');
+    }
+    
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
+    await user.save();
+    
+    const resetUrl = `${process.env.CLIENT_URL}/auth/reset-password/${resetToken}`;
+    
+    const msg = {
+      to: email,
+      from: process.env.EMAIL_FROM,
+      subject: 'Password Reset',
+      html: `<p>Click <a href="${resetUrl}">here</a> to reset your password.</p>`
+    };
+    
+    await sgMail.send(msg);
+    return sendResponse(res, 200, 'success', 'Reset email sent');
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+    
+    if (!user) {
+      return sendResponse(res, 400, 'fail', 'Invalid or expired token');
+    }
+    
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+    
+    return sendResponse(res, 200, 'success', 'Password updated successfully');
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
 module.exports = {
   login,
   inviteAdmin,
   registerAdmin,
-  createSuperAdmin
+  createSuperAdmin,
+  forgotPassword,
+  resetPassword
 };

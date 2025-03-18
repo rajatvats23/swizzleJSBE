@@ -4,7 +4,9 @@ const {
     login,
     inviteAdmin,
     registerAdmin,
-    createSuperAdmin
+    createSuperAdmin,
+    forgotPassword,
+    resetPassword
 } = require('../controllers/authController');
 const { protect, restrictTo} = require('../middleware/authMiddleware');
 
@@ -13,6 +15,8 @@ const { protect, restrictTo} = require('../middleware/authMiddleware');
 router.post('/login', login);
 router.post('/register/:token', registerAdmin);
 router.post('/create-superAdmin', createSuperAdmin);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password/:token', resetPassword);
 
 
 // Protected Routes
