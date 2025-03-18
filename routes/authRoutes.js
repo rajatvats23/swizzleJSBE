@@ -17,6 +17,6 @@ router.post('/create-superAdmin', createSuperAdmin);
 
 // Protected Routes
 
-router.post('/invite',  protect, restrictTo('superAdmin'), inviteAdmin);
+router.post('/invite', protect, restrictTo('superadmin'), inviteAdmin);
 
 module.exports = router;
