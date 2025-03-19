@@ -47,6 +47,19 @@ const userSchema = new mongoose.Schema({
     isVerified: {
         type: Boolean,
         default: false
+    },
+    // MFA fields
+    mfaEnabled: {
+        type: Boolean,
+        default: false
+    },
+    mfaSecret: {
+        type: String,
+        default: null
+    },
+    tempMfaSecret: {
+        type: String,
+        default: null
     }
 }, { timestamps: true });
 

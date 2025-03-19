@@ -9,6 +9,7 @@ dotenv.config();
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
+const mfaRoutes = require('./routes/mfaRoutes');
 
 // Create Express app
 const app = express();
@@ -26,6 +27,7 @@ app.use(cors({
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/mfa', mfaRoutes);
 
 // Define a simple test route
 app.get('/', (req, res) => {

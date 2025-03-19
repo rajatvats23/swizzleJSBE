@@ -44,6 +44,45 @@ const login = async (req, res) => {
 
     // Check if user exists and password matches
     if (user && (await user.matchPassword(password))) {
+      // If MFA is enabled for this user
+      if (user.mfaEnabled) {
+        if (user.mfaSecret) {
+          // MFA already set up, require verification
+          const userData = {
+            _id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            role: user.role,
+            requireMfa: true,
+            mfaSetupRequired: false
+          };
+          
+          return sendResponse(res, 200, 'success', 'MFA verification required', userData);
+        } else {
+          // MFA enabled by admin but not set up yet, require setup
+          const tempToken = jwt.sign(
+            { id: user._id, temp: true },
+            process.env.JWT_SECRET,
+            { expiresIn: '15m' } // Short expiry for security
+          );
+          
+          const userData = {
+            _id: user._id,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            role: user.role,
+            requireMfa: true,
+            mfaSetupRequired: true,
+            tempToken: tempToken // Add temporary token for MFA setup
+          };
+          
+          return sendResponse(res, 200, 'success', 'MFA setup required', userData);
+        }
+      }
+      
+      // Normal login, no MFA required
       const userData = {
         _id: user._id,
         firstName: user.firstName,

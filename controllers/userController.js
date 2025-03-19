@@ -20,7 +20,7 @@ const sendResponse = (res, statusCode, status, message, data = null) => {
 // @access  Private/SuperAdmin
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.find().select('-password -mfaSecret -tempMfaSecret');
     return sendResponse(res, 200, 'success', 'Users retrieved successfully', { users });
   } catch (error) {
     return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
@@ -32,7 +32,7 @@ const getUsers = async (req, res) => {
 // @access  Private/SuperAdmin
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findById(req.params.id).select('-password -mfaSecret -tempMfaSecret');
     
     if (!user) {
       return sendResponse(res, 404, 'fail', 'User not found');
@@ -72,7 +72,8 @@ const updateUser = async (req, res) => {
       email: updatedUser.email,
       countryCode: updatedUser.countryCode,
       phoneNumber: updatedUser.phoneNumber,
-      role: updatedUser.role
+      role: updatedUser.role,
+      mfaEnabled: updatedUser.mfaEnabled
     });
   } catch (error) {
     return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
@@ -107,7 +108,7 @@ const deleteUser = async (req, res) => {
 // @access  Private
 const getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user._id).select('-password -mfaSecret -tempMfaSecret');
     
     if (!user) {
       return sendResponse(res, 404, 'fail', 'User not found');
@@ -153,6 +154,7 @@ const updateUserProfile = async (req, res) => {
       countryCode: updatedUser.countryCode,
       phoneNumber: updatedUser.phoneNumber,
       role: updatedUser.role,
+      mfaEnabled: updatedUser.mfaEnabled,
       token: password ? generateToken(updatedUser._id) : undefined
     });
   } catch (error) {
