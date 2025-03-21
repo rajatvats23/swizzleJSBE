@@ -10,6 +10,7 @@ dotenv.config();
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const mfaRoutes = require('./routes/mfaRoutes');
+const restaurantRoutes = require('./routes/restaurantRoutes');
 
 // Create Express app
 const app = express();
@@ -28,6 +29,7 @@ app.use(cors({
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/mfa', mfaRoutes);
+app.use('/api/restaurants', restaurantRoutes);
 
 // Define a simple test route
 app.get('/', (req, res) => {

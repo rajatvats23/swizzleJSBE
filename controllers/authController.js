@@ -2,6 +2,7 @@ const User = require('../models/userModel');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const sgMail = require('@sendgrid/mail');
+const Restaurant = require('../models/restaurantModel');
 
 // Set SendGrid API Key
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -200,6 +201,14 @@ const registerAdmin = async (req, res) => {
     user.inviteTokenExpiry = undefined;
 
     await user.save();
+
+    //If user is a manager, update their associated restauarant
+    if (user.role === 'manager') {
+      await Restaurant.findOneAndUpdate(
+        {managerEmail: user.email},
+        {manager: user._id}
+      );
+    }
 
     const userData = {
       _id: user._id,
