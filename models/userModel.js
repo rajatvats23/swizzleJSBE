@@ -33,7 +33,7 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['superadmin', 'admin', 'manager'],
+        enum: ['superadmin', 'admin', 'manager', 'staff'],
         default: 'admin'
     },
     createdBy: {
@@ -59,6 +59,12 @@ const userSchema = new mongoose.Schema({
     },
     tempMfaSecret: {
         type: String,
+        default: null
+    },
+    // Restaurant association
+    restaurantId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Restaurant',
         default: null
     }
 }, { timestamps: true });

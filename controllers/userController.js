@@ -18,9 +18,17 @@ const sendResponse = (res, statusCode, status, message, data = null) => {
 // @desc    Get all users
 // @route   GET /api/users
 // @access  Private/SuperAdmin
+// In controllers/userController.js - Update the getUsers function
 const getUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password -mfaSecret -tempMfaSecret');
+    let query = {};
+    
+    // If requester is a restaurant manager, only show users from their restaurant
+    if (req.user.role === 'manager' && req.user.restaurantId) {
+      query.restaurantId = req.user.restaurantId;
+    }
+    
+    const users = await User.find(query).select('-password -mfaSecret -tempMfaSecret');
     return sendResponse(res, 200, 'success', 'Users retrieved successfully', { users });
   } catch (error) {
     return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
@@ -29,13 +37,21 @@ const getUsers = async (req, res) => {
 
 // @desc    Get user by ID
 // @route   GET /api/users/:id
-// @access  Private/SuperAdmin
+// @access  Private/SuperAdmin/Admin/Manager
 const getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password -mfaSecret -tempMfaSecret');
     
     if (!user) {
       return sendResponse(res, 404, 'fail', 'User not found');
+    }
+    
+    // If manager, ensure they can only view their restaurant's users
+    if (req.user.role === 'manager') {
+      if (!user.restaurantId || !req.user.restaurantId || 
+          user.restaurantId.toString() !== req.user.restaurantId.toString()) {
+        return sendResponse(res, 403, 'fail', 'Access denied: You can only view users from your restaurant');
+      }
     }
     
     return sendResponse(res, 200, 'success', 'User retrieved successfully', { user });
@@ -46,7 +62,7 @@ const getUserById = async (req, res) => {
 
 // @desc    Update user
 // @route   PUT /api/users/:id
-// @access  Private/SuperAdmin
+// @access  Private/SuperAdmin/Admin/Manager
 const updateUser = async (req, res) => {
   try {
     const { firstName, lastName, countryCode, phoneNumber } = req.body;
@@ -55,6 +71,14 @@ const updateUser = async (req, res) => {
     
     if (!user) {
       return sendResponse(res, 404, 'fail', 'User not found');
+    }
+    
+    // If manager, ensure they can only update their restaurant's users
+    if (req.user.role === 'manager') {
+      if (!user.restaurantId || !req.user.restaurantId || 
+          user.restaurantId.toString() !== req.user.restaurantId.toString()) {
+        return sendResponse(res, 403, 'fail', 'Access denied: You can only update users from your restaurant');
+      }
     }
     
     // Update fields
@@ -79,10 +103,9 @@ const updateUser = async (req, res) => {
     return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
   }
 };
-
 // @desc    Delete user
 // @route   DELETE /api/users/:id
-// @access  Private/SuperAdmin
+// @access  Private/SuperAdmin/Admin/Manager
 const deleteUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -93,6 +116,18 @@ const deleteUser = async (req, res) => {
     
     if (user.role === 'superadmin') {
       return sendResponse(res, 400, 'fail', 'Cannot delete superadmin');
+    }
+    
+    // If manager, ensure they can only delete their restaurant's users
+    if (req.user.role === 'manager') {
+      if (user.role !== 'staff') {
+        return sendResponse(res, 403, 'fail', 'Access denied: Managers can only delete staff users');
+      }
+      
+      if (!user.restaurantId || !req.user.restaurantId || 
+          user.restaurantId.toString() !== req.user.restaurantId.toString()) {
+        return sendResponse(res, 403, 'fail', 'Access denied: You can only delete users from your restaurant');
+      }
     }
     
     await user.deleteOne();

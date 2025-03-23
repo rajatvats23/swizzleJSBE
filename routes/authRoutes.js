@@ -11,7 +11,7 @@ const {
 const { protect, restrictTo} = require('../middleware/authMiddleware');
 
 
-//Public routes
+// Public routes
 router.post('/login', login);
 router.post('/register/:token', registerAdmin);
 router.post('/create-superAdmin', createSuperAdmin);
@@ -19,8 +19,7 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:token', resetPassword);
 
 
-// Protected Routes
-
-router.post('/invite', protect, restrictTo('superadmin'), inviteAdmin);
+// Protected Routes - Allow superadmin, admin, and manager to invite users
+router.post('/invite', protect, restrictTo('superadmin', 'admin', 'manager'), inviteAdmin);
 
 module.exports = router;

@@ -55,9 +55,16 @@ const login = async (req, res) => {
             lastName: user.lastName,
             email: user.email,
             role: user.role,
+            countryCode: user.countryCode,
+            phoneNumber: user.phoneNumber,
             requireMfa: true,
             mfaSetupRequired: false
           };
+          
+          // Only add restaurantId if it exists
+          if (user.restaurantId) {
+            userData.restaurantId = user.restaurantId;
+          }
           
           return sendResponse(res, 200, 'success', 'MFA verification required', userData);
         } else {
@@ -74,10 +81,17 @@ const login = async (req, res) => {
             lastName: user.lastName,
             email: user.email,
             role: user.role,
+            countryCode: user.countryCode,
+            phoneNumber: user.phoneNumber,
             requireMfa: true,
             mfaSetupRequired: true,
             tempToken: tempToken // Add temporary token for MFA setup
           };
+          
+          // Only add restaurantId if it exists
+          if (user.restaurantId) {
+            userData.restaurantId = user.restaurantId;
+          }
           
           return sendResponse(res, 200, 'success', 'MFA setup required', userData);
         }
@@ -90,8 +104,15 @@ const login = async (req, res) => {
         lastName: user.lastName,
         email: user.email,
         role: user.role,
+        countryCode: user.countryCode,
+        phoneNumber: user.phoneNumber,
         token: generateToken(user._id)
       };
+      
+      // Only add restaurantId if it exists
+      if (user.restaurantId) {
+        userData.restaurantId = user.restaurantId;
+      }
       
       return sendResponse(res, 200, 'success', 'Login successful', userData);
     } else {
@@ -102,9 +123,9 @@ const login = async (req, res) => {
   }
 };
 
-// @desc    Send invite to admin
+// @desc    Send invite to admin or staff
 // @route   POST /api/auth/invite
-// @access  Private/SuperAdmin
+// @access  Private/SuperAdmin/Admin/Manager
 const inviteAdmin = async (req, res) => {
   try {
     const { email } = req.body;
@@ -124,18 +145,34 @@ const inviteAdmin = async (req, res) => {
     const inviteToken = crypto.randomBytes(20).toString('hex');
     const inviteTokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
+    // Determine role and restaurant based on inviter's role
+    let role = 'admin'; // Default role
+    let restaurantId = null;
+
+    // If inviter is restaurant manager, set role to staff and assign restaurant
+    if (req.user.role === 'manager') {
+      role = 'staff';
+      restaurantId = req.user.restaurantId;
+    }
+
     if (user) {
       // Update existing unverified user
       user.inviteToken = inviteToken;
       user.inviteTokenExpiry = inviteTokenExpiry;
       user.createdBy = req.user._id;
+      user.role = role;
+      
+      // Only set restaurantId if it exists
+      if (restaurantId) {
+        user.restaurantId = restaurantId;
+      }
     } else {
-      // Create a new user with invite token
-      user = new User({
+      // Create a new user with appropriate role
+      const userData = {
         email,
         inviteToken,
         inviteTokenExpiry,
-        role: 'admin',
+        role,
         createdBy: req.user._id,
         // Setting temporary values for required fields
         firstName: 'Pending',
@@ -143,7 +180,14 @@ const inviteAdmin = async (req, res) => {
         password: crypto.randomBytes(10).toString('hex'),
         countryCode: '+91',
         phoneNumber: '0000000000'
-      });
+      };
+      
+      // Only add restaurantId if it exists
+      if (restaurantId) {
+        userData.restaurantId = restaurantId;
+      }
+      
+      user = new User(userData);
     }
 
     await user.save();
@@ -155,9 +199,9 @@ const inviteAdmin = async (req, res) => {
     const msg = {
       to: email,
       from: process.env.EMAIL_FROM,
-      subject: 'Invitation to Join as Admin',
+      subject: role === 'staff' ? 'Invitation to Join as Staff' : 'Invitation to Join as Admin',
       html: `
-        <h1>You've been invited to join as an Admin</h1>
+        <h1>You've been invited to join as ${role === 'staff' ? 'Restaurant Staff' : 'an Admin'}</h1>
         <p>Please click the link below to complete your registration:</p>
         <a href="${inviteUrl}" target="_blank">Complete Registration</a>
         <p>This link will expire in 24 hours.</p>
@@ -202,7 +246,7 @@ const registerAdmin = async (req, res) => {
 
     await user.save();
 
-    //If user is a manager, update their associated restauarant
+    //If user is a manager, update their associated restaurant
     if (user.role === 'manager') {
       await Restaurant.findOneAndUpdate(
         {managerEmail: user.email},
@@ -216,8 +260,15 @@ const registerAdmin = async (req, res) => {
       lastName: user.lastName,
       email: user.email,
       role: user.role,
+      countryCode: user.countryCode,
+      phoneNumber: user.phoneNumber,
       token: generateToken(user._id)
     };
+    
+    // Only add restaurantId if it exists
+    if (user.restaurantId) {
+      userData.restaurantId = user.restaurantId;
+    }
 
     return sendResponse(res, 200, 'success', 'Registration successful', userData);
   } catch (error) {

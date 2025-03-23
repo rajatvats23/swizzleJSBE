@@ -15,13 +15,14 @@ router.route('/profile')
   .get(protect, getUserProfile)
   .put(protect, updateUserProfile);
 
-// Admin routes (accessible only by superadmin)
+// Admin routes (accessible by superadmin, admin, and manager with proper filtering)
 router.route('/')
-  .get(protect, restrictTo('superadmin'), getUsers);
+  .get(protect, restrictTo('superadmin', 'admin', 'manager'), getUsers);
 
+// User management - superadmin can manage all, manager can only manage their restaurant's staff
 router.route('/:id')
-  .get(protect, restrictTo('superadmin'), getUserById)
-  .put(protect, restrictTo('superadmin'), updateUser)
-  .delete(protect, restrictTo('superadmin'), deleteUser);
+  .get(protect, restrictTo('superadmin', 'admin', 'manager'), getUserById)
+  .put(protect, restrictTo('superadmin', 'admin', 'manager'), updateUser)
+  .delete(protect, restrictTo('superadmin', 'admin', 'manager'), deleteUser);
 
 module.exports = router;
