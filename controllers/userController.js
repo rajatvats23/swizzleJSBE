@@ -22,10 +22,17 @@ const sendResponse = (res, statusCode, status, message, data = null) => {
 const getUsers = async (req, res) => {
   try {
     let query = {};
+
+    console.log(req.user);
     
-    // If requester is a restaurant manager, only show users from their restaurant
+    // If requester is a restaurant manager, only show staff users from their restaurant
     if (req.user.role === 'manager' && req.user.restaurantId) {
-      query.restaurantId = req.user.restaurantId;
+      console.log('is a manager')
+      console.log(req.user.restaurantId);
+      query = {
+        restaurantId: req.user.restaurantId,
+        role: 'staff' // Only return staff members, not admins or superadmins
+      };
     }
     
     const users = await User.find(query).select('-password -mfaSecret -tempMfaSecret');
