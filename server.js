@@ -13,6 +13,10 @@ const mfaRoutes = require('./routes/mfaRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
 const menuRoutes = require('./routes/menuRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
+const tagRoutes = require('./routes/tagRoutes');       
+const productRoutes = require('./routes/productRoutes');
+const addonRoutes = require('./routes/addonRoutes'); 
+
 
 // Create Express app
 const app = express();
@@ -34,6 +38,9 @@ app.use('/api/mfa', mfaRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/tags', tagRoutes);         
+app.use('/api/products', productRoutes); 
+app.use('/api/addons', addonRoutes);
 
 // Define a simple test route
 app.get('/', (req, res) => {
