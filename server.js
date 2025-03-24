@@ -11,6 +11,7 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const mfaRoutes = require('./routes/mfaRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
+const menuRoutes = require('./routes/menuRoutes');
 
 // Create Express app
 const app = express();
@@ -19,7 +20,7 @@ const app = express();
 app.use(express.json());
 
 app.use(cors({
-  origin: ['http://localhost:4200'], // Your frontend URL
+  origin: ['http://localhost:4500'], // Your frontend URL
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -30,6 +31,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/mfa', mfaRoutes);
 app.use('/api/restaurants', restaurantRoutes);
+app.use('/api/menus', menuRoutes);
 
 // Define a simple test route
 app.get('/', (req, res) => {
