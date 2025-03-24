@@ -12,6 +12,7 @@ const userRoutes = require('./routes/userRoutes');
 const mfaRoutes = require('./routes/mfaRoutes');
 const restaurantRoutes = require('./routes/restaurantRoutes');
 const menuRoutes = require('./routes/menuRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 
 // Create Express app
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/mfa', mfaRoutes);
 app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/menus', menuRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Define a simple test route
 app.get('/', (req, res) => {
