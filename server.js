@@ -16,6 +16,7 @@ const categoryRoutes = require('./routes/categoryRoutes');
 const tagRoutes = require('./routes/tagRoutes');       
 const productRoutes = require('./routes/productRoutes');
 const addonRoutes = require('./routes/addonRoutes'); 
+const tableRoutes = require('./routes/tableRoutes'); 
 
 
 // Create Express app
@@ -41,6 +42,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/tags', tagRoutes);         
 app.use('/api/products', productRoutes); 
 app.use('/api/addons', addonRoutes);
+app.use('/api/tables', tableRoutes);
 
 // Define a simple test route
 app.get('/', (req, res) => {

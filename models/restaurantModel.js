@@ -44,6 +44,11 @@ const restaurantSchema = new mongoose.Schema({
     sunday: { open: String, close: String }
   },
   website: String,
+  // Required when making a reservation to a table (small restauarnts will be false, large true)
+  requiresStaffApproval: {
+    type: Boolean,
+    default: false
+  },
   
   // Status tracking
   status: { type: String, enum: ['draft', 'active', 'inactive'], default: 'draft' },
