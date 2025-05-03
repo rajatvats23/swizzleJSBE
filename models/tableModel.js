@@ -21,7 +21,7 @@ const tableSchema = new mongoose.Schema({
         enum: ['Available', 'Reserved', 'Occupied', 'Cleaning', 'Out of Service'],
         default: 'Available'
     },
-    currentOcupancy: {
+    currentOccupancy: {
         type: Number,
         default: 0,
         min: 0

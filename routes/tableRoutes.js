@@ -24,7 +24,7 @@ router.route('/:id')
 
 // Special route for updating table status - both managers and staff can update status
 router.route('/:id/status')
-  .patch(protect, restrictTo('manager', 'staff'), updateTableStatus);
+  .put(protect, restrictTo('manager', 'staff'), updateTableStatus);
 
 // Public route for QR code access
 router.route('/qr/:qrCodeIdentifier')
