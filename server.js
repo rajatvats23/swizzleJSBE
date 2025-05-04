@@ -1,3 +1,4 @@
+// Update to server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
@@ -17,7 +18,7 @@ const tagRoutes = require('./routes/tagRoutes');
 const productRoutes = require('./routes/productRoutes');
 const addonRoutes = require('./routes/addonRoutes'); 
 const tableRoutes = require('./routes/tableRoutes'); 
-
+const customerRoutes = require('./routes/customerRoutes'); // Add customer routes
 
 // Create Express app
 const app = express();
@@ -26,7 +27,7 @@ const app = express();
 app.use(express.json());
 
 app.use(cors({
-  origin: ['http://localhost:4500'], // Your frontend URL
+  origin: process.env.ALLOWED_ORIGINS.split(','),
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -43,6 +44,7 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/products', productRoutes); 
 app.use('/api/addons', addonRoutes);
 app.use('/api/tables', tableRoutes);
+app.use('/api/customer', customerRoutes); // Mount customer routes
 
 // Define a simple test route
 app.get('/', (req, res) => {
