@@ -2,6 +2,9 @@
 const Customer = require('../models/customerModel');
 const Table = require('../models/tableModel');
 const Restaurant = require('../models/restaurantModel');
+const Menu = require('../models/menuModel');
+const Category = require('../models/categoryModel');
+const Product = require('../models/productModel');
 const twilio = require('twilio');
 
 // Twilio client setup - wrapped in try/catch to prevent errors if credentials are invalid
@@ -373,7 +376,6 @@ const getRestaurantMenu = async (req, res) => {
     return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
   }
 };
-
 module.exports = {
   sendOTP,
   verifyOTP,

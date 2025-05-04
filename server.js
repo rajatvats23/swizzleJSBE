@@ -30,7 +30,7 @@ app.use(express.json());
 
 // Configure CORS specifically for React dev server
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://192.168.10.251:3000', 'http://localhost:4500'],  // React dev server address
+  origin: ['http://localhost:3000', 'http://2409:4055:2e98:cd6c:ad2f:2ce3:c43b:1555:3000', 'http://localhost:4500'],  // React dev server address
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
