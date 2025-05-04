@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Customer App</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2, h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .section {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .active {
+            display: block;
+        }
+
+        .message {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+
+        #reader {
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .info-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .qr-result {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e9f7ef;
+            border-radius: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 10px;
+        }
+
+        /* Menu styles */
+        .menu-section {
+            margin-bottom: 20px;
+        }
+
+        .category {
+            margin-bottom: 20px;
+        }
+
+        .category-header {
+            background-color: #f1f1f1;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .product-card {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .product-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .product-price {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .product-description {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+
+        .add-to-cart {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 14px;
+            width: auto;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .tab {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab.active {
+            border-bottom: 2px solid #4CAF50;
+            font-weight: bold;
+        }
+
+        /* Cart styles */
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .cart-total {
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        .quantity-control {
+            display: flex;
+            align-items: center;
+        }
+
+        .quantity-btn {
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            margin: 0 5px;
+        }
+
+        .quantity {
+            margin: 0 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Restaurant Customer App</h1>
+
+        <!-- Phone Number Section -->
+        <div id="phoneSection" class="section active">
+            <div class="form-group">
+                <label for="phoneNumber">Enter your phone number</label>
+                <input type="tel" id="phoneNumber" placeholder="+919876543210" required>
+            </div>
+            <button id="sendOtpBtn">Send OTP</button>
+            <div id="phoneMessage" class="message"></div>
+        </div>
+
+        <!-- OTP Verification Section -->
+        <div id="otpSection" class="section">
+            <div class="form-group">
+                <label for="otp">Enter OTP sent to your phone</label>
+                <input type="text" id="otp" placeholder="123456" maxlength="6">
+            </div>
+            <button id="verifyOtpBtn">Verify OTP</button>
+            <div id="otpMessage" class="message"></div>
+        </div>
+
+        <!-- Profile Section -->
+        <div id="profileSection" class="section">
+            <h2>Welcome! You are logged in.</h2>
+            <div class="info-box" id="profileInfo"></div>
+
+            <div class="form-group">
+                <label for="name">Your Name (Optional)</label>
+                <input type="text" id="name" placeholder="Enter your name">
+            </div>
+            <button id="updateProfileBtn">Update Profile</button>
+
+            <div style="margin-top: 20px;">
+                <button id="scanQRBtn">Scan Table QR Code</button>
+            </div>
+            <div id="profileMessage" class="message"></div>
+        </div>
+
+        <!-- QR Scanner Section -->
+        <div id="scannerSection" class="section">
+            <h2>Scan Table QR Code</h2>
+            <div id="reader"></div>
+            <div id="qrResult" class="qr-result"></div>
+            <button id="backToProfileBtn" style="margin-top: 15px;">Back to Profile</button>
+        </div>
+
+        <!-- Table Session Section -->
+        <div id="tableSection" class="section">
+            <div class="tabs">
+                <div class="tab active" data-tab="menu">Menu</div>
+                <div class="tab" data-tab="cart">Cart</div>
+                <div class="tab" data-tab="session">Session</div>
+            </div>
+
+            <!-- Menu Tab -->
+            <div id="menuTab" class="tab-content active">
+                <h2>Menu</h2>
+                <div id="categoriesContainer"></div>
+                <div id="menuMessage" class="message"></div>
+                <div id="menuLoading" class="loading">Loading menu...</div>
+            </div>
+
+            <!-- Cart Tab -->
+            <div id="cartTab" class="tab-content" style="display: none;">
+                <h2>Your Order</h2>
+                <div id="cartItems"></div>
+                <div id="cartTotal" class="cart-total">Total: $0.00</div>
+                <button id="placeOrderBtn" style="margin-top: 15px;">Place Order</button>
+                <div id="cartMessage" class="message"></div>
+            </div>
+
+            <!-- Session Tab -->
+            <div id="sessionTab" class="tab-content" style="display: none;">
+                <h2>Your Table Session</h2>
+                <div id="tableInfo" class="info-box"></div>
+                <button id="checkoutBtn">Checkout from Table</button>
+                <div id="tableMessage" class="message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Base URL
+        const currentOrigin = window.location.origin;
+        const API_BASE_URL = `${currentOrigin}/api`;
+
+        // DOM Elements
+        const phoneSection = document.getElementById('phoneSection');
+        const otpSection = document.getElementById('otpSection');
+        const profileSection = document.getElementById('profileSection');
+        const scannerSection = document.getElementById('scannerSection');
+        const tableSection = document.getElementById('tableSection');
+
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        const sendOtpBtn = document.getElementById('sendOtpBtn');
+        const phoneMessage = document.getElementById('phoneMessage');
+
+        const otpInput = document.getElementById('otp');
+        const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+        const otpMessage = document.getElementById('otpMessage');
+
+        const profileInfo = document.getElementById('profileInfo');
+        const nameInput = document.getElementById('name');
+        const updateProfileBtn = document.getElementById('updateProfileBtn');
+        const scanQRBtn = document.getElementById('scanQRBtn');
+        const profileMessage = document.getElementById('profileMessage');
+
+        const reader = document.getElementById('reader');
+        const qrResult = document.getElementById('qrResult');
+        const backToProfileBtn = document.getElementById('backToProfileBtn');
+
+        const tableInfo = document.getElementById('tableInfo');
+        const checkoutBtn = document.getElementById('checkoutBtn');
+        const tableMessage = document.getElementById('tableMessage');
+
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        const menuTab = document.getElementById('menuTab');
+        const cartTab = document.getElementById('cartTab');
+        const sessionTab = document.getElementById('sessionTab');
+
+        const categoriesContainer = document.getElementById('categoriesContainer');
+        const menuMessage = document.getElementById('menuMessage');
+        const menuLoading = document.getElementById('menuLoading');
+
+        const cartItems = document.getElementById('cartItems');
+        const cartTotal = document.getElementById('cartTotal');
+        const placeOrderBtn = document.getElementById('placeOrderBtn');
+        const cartMessage = document.getElementById('cartMessage');
+
+        // State variables
+        let authToken = localStorage.getItem('authToken') || null;
+        let qrScanner = null;
+        let cart = JSON.parse(localStorage.getItem('cart')) || [];
+        let menuData = null;
+
+        // Tab switching
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs
+                tabs.forEach(t => t.classList.remove('active'));
+                // Add active class to clicked tab
+                tab.classList.add('active');
+                
+                // Hide all tab contents
+                tabContents.forEach(content => content.style.display = 'none');
+                
+                // Show the selected tab content
+                const tabName = tab.getAttribute('data-tab');
+                document.getElementById(`${tabName}Tab`).style.display = 'block';
+            });
+        });
+
+        // Check if token exists and validate it
+        function checkAuth() {
+            if (authToken) {
+                // Show profile section
+                showSection(profileSection);
+                fetchProfile();
+            }
+        }
+
+        // Show a specific section and hide others
+        function showSection(section) {
+            [phoneSection, otpSection, profileSection, scannerSection, tableSection].forEach(s => {
+                s.classList.remove('active');
+            });
+            section.classList.add('active');
+        }
+
+        // Show message
+        function showMessage(element, message, isError = false) {
+            element.textContent = message;
+            element.classList.remove('success', 'error');
+            element.classList.add(isError ? 'error' : 'success');
+        }
+
+        // Send OTP
+        sendOtpBtn.addEventListener('click', async () => {
+            const phoneNumber = phoneNumberInput.value.trim();
+            if (!phoneNumber) {
+                showMessage(phoneMessage, 'Please enter your phone number', true);
+                return;
+            }
+
+            try {
+                sendOtpBtn.disabled = true;
+                sendOtpBtn.textContent = 'Sending...';
+
+                const response = await fetch(`${API_BASE_URL}/customer/send-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSection(otpSection);
+                    
+                    if (data.data && data.data.otp) {
+                        // Auto-populate the OTP field
+                        otpInput.value = data.data.otp;
+                        // Show message
+                        showMessage(otpMessage, `Development OTP: ${data.data.otp}`);
+                    }
+                } else {
+                    showMessage(phoneMessage, data.message || 'Failed to send OTP', true);
+                }
+            } catch (error) {
+                showMessage(phoneMessage, error.message || 'An error occurred', true);
+            } finally {
+                sendOtpBtn.disabled = false;
+                sendOtpBtn.textContent = 'Send OTP';
+            }
+        });
+
+        // Verify OTP
+        verifyOtpBtn.addEventListener('click', async () => {
+            const phoneNumber = phoneNumberInput.value.trim();
+            const otp = otpInput.value.trim();
+
+            if (!otp) {
+                showMessage(otpMessage, 'Please enter the OTP', true);
+                return;
+            }
+
+            try {
+                verifyOtpBtn.disabled = true;
+                verifyOtpBtn.textContent = 'Verifying...';
+
+                const response = await fetch(`${API_BASE_URL}/customer/verify-otp`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber, otp })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success' && data.data.token) {
+                    authToken = data.data.token;
+                    localStorage.setItem('authToken', authToken);
+                    showMessage(otpMessage, 'OTP verified successfully');
+
+                    // Check for pending table scan
+                    const pendingTableId = localStorage.getItem('pendingTableId');
+                    if (pendingTableId) {
+                        localStorage.removeItem('pendingTableId');
+                        scanTable(pendingTableId);
+                    } else {
+                        fetchProfile();
+                        showSection(profileSection);
+                    }
+                } else {
+                    showMessage(otpMessage, data.message || 'Failed to verify OTP', true);
+                }
+            } catch (error) {
+                showMessage(otpMessage, error.message || 'An error occurred', true);
+            } finally {
+                verifyOtpBtn.disabled = false;
+                verifyOtpBtn.textContent = 'Verify OTP';
+            }
+        });
+
+        // Fetch user profile
+        async function fetchProfile() {
+            if (!authToken) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/customer/profile`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    // Token expired or invalid
+                    logout();
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'success' && data.data.customer) {
+                    const customer = data.data.customer;
+                    profileInfo.innerHTML = `
+                        <p><strong>Phone:</strong> ${customer.phoneNumber}</p>
+                        <p><strong>Name:</strong> ${customer.name || 'Not set'}</p>
+                    `;
+
+                    // Pre-fill name field
+                    if (customer.name) {
+                        nameInput.value = customer.name;
+                    }
+
+                    // Check if customer has active session
+                    if (customer.currentSession && customer.currentSession.active) {
+                        // If sessionInfo is provided
+                        if (data.data.sessionInfo) {
+                            displayTableInfo(data.data.sessionInfo);
+                        }
+                        
+                        fetchMenu();
+                        showSection(tableSection);
+                    }
+                } else {
+                    showMessage(profileMessage, data.message || 'Failed to load profile', true);
+                }
+            } catch (error) {
+                showMessage(profileMessage, error.message || 'An error occurred', true);
+            }
+        }
+
+        // Update profile
+        updateProfileBtn.addEventListener('click', async () => {
+            const name = nameInput.value.trim();
+
+            try {
+                updateProfileBtn.disabled = true;
+                updateProfileBtn.textContent = 'Updating...';
+
+                const response = await fetch(`${API_BASE_URL}/customer/profile`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ name })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showMessage(profileMessage, 'Profile updated successfully');
+                    fetchProfile();
+                } else {
+                    showMessage(profileMessage, data.message || 'Failed to update profile', true);
+                }
+            } catch (error) {
+                showMessage(profileMessage, error.message || 'An error occurred', true);
+            } finally {
+                updateProfileBtn.disabled = false;
+                updateProfileBtn.textContent = 'Update Profile';
+            }
+        });
+
+        // Initialize QR Scanner
+        scanQRBtn.addEventListener('click', () => {
+            showSection(scannerSection);
+            initQRScanner();
+        });
+
+        function initQRScanner() {
+            if (qrScanner) {
+                qrScanner.resume();
+                return;
+            }
+
+            qrScanner = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+            qrScanner.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            );
+        }
+
+        function onScanSuccess(qrCodeIdentifier) {
+            qrScanner.pause();
+            qrResult.textContent = `QR Code detected: ${qrCodeIdentifier}`;
+
+            // Check if this is a valid table QR code (usually would check format)
+            scanTable(qrCodeIdentifier);
+        }
+
+        function onScanFailure(error) {
+            // Handle scan failure silently
+            console.log(error);
+        }
+
+        // Scan table with QR code
+        async function scanTable(qrCodeIdentifier) {
+            try {
+                qrResult.textContent = 'Processing table scan...';
+
+                const response = await fetch(`${API_BASE_URL}/customer/scan-table/${qrCodeIdentifier}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    qrResult.textContent = `Successfully started session at table ${data.data.table.tableNumber}`;
+
+                    // Display table info
+                    displayTableInfo({
+                        restaurant: data.data.restaurant,
+                        table: data.data.table,
+                        startTime: data.data.session.startTime
+                    });
+
+                    // Stop the scanner and clean up
+                    if (qrScanner) {
+                        qrScanner.stop();
+                        qrScanner = null;
+                    }
+
+                    // Fetch menu and show table section
+                    setTimeout(() => {
+                        fetchMenu();
+                        showSection(tableSection);
+                    }, 1000);
+                } else {
+                    qrResult.textContent = data.message || 'Failed to process table scan';
+                }
+            } catch (error) {
+                qrResult.textContent = error.message || 'An error occurred';
+            }
+        }
+
+        // Display table info
+        function displayTableInfo(sessionInfo) {
+            const startTime = new Date(sessionInfo.startTime).toLocaleString();
+            tableInfo.innerHTML = `
+                <p><strong>Session Active</strong></p>
+                <p><strong>Restaurant:</strong> ${sessionInfo.restaurant.name || sessionInfo.restaurant}</p>
+                <p><strong>Table:</strong> ${sessionInfo.table.tableNumber || sessionInfo.table}</p>
+                <p><strong>Started:</strong> ${startTime}</p>
+            `;
+        }
+
+        // Fetch restaurant menu
+        async function fetchMenu() {
+            try {
+                menuLoading.style.display = 'block';
+                categoriesContainer.innerHTML = '';
+                menuMessage.textContent = '';
+
+                const response = await fetch(`${API_BASE_URL}/customer/menu`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    menuData = data.data;
+                    displayMenu(menuData);
+                } else {
+                    menuMessage.textContent = data.message || 'Failed to load menu';
+                    menuMessage.classList.add('error');
+                }
+            } catch (error) {
+                menuMessage.textContent = error.message || 'An error occurred';
+                menuMessage.classList.add('error');
+            } finally {
+                menuLoading.style.display = 'none';
+            }
+        }
+
+        // Display menu categories and products
+        function displayMenu(menuData) {
+            if (!menuData || !menuData.categories || !menuData.products) {
+                menuMessage.textContent = 'No menu items available';
+                menuMessage.classList.add('error');
+                return;
+            }
+
+            categoriesContainer.innerHTML = '';
+
+            // Group products by category
+            const productsByCategory = {};
+            menuData.categories.forEach(category => {
+                productsByCategory[category._id] = [];
+            });
+
+            menuData.products.forEach(product => {
+                if (product.category && productsByCategory[product.category._id]) {
+                    productsByCategory[product.category._id].push(product);
+                }
+            });
+
+            // Create category sections with products
+            menuData.categories.forEach(category => {
+                const products = productsByCategory[category._id] || [];
+                
+                if (products.length === 0) return; // Skip empty categories
+                
+                const categoryDiv = document.createElement('div');
+                categoryDiv.className = 'category';
+                
+                const categoryHeader = document.createElement('div');
+                categoryHeader.className = 'category-header';
+                categoryHeader.textContent = category.name;
+                
+                categoryDiv.appendChild(categoryHeader);
+                
+                // Add products to category
+                products.forEach(product => {
+                    const productCard = document.createElement('div');
+                    productCard.className = 'product-card';
+                    
+                    const productName = document.createElement('div');
+                    productName.className = 'product-name';
+                    productName.textContent = product.name;
+                    
+                    const productPrice = document.createElement('div');
+                    productPrice.className = 'product-price';
+                    productPrice.textContent = `$${product.price.toFixed(2)}`;
+                    
+                    const productDescription = document.createElement('div');
+                    productDescription.className = 'product-description';
+                    productDescription.textContent = product.description || '';
+                    
+                    const addButton = document.createElement('button');
+                    addButton.className = 'add-to-cart';
+                    addButton.textContent = 'Add to Order';
+                    addButton.onclick = () => addToCart(product);
+                    
+                    productCard.appendChild(productName);
+                    productCard.appendChild(productPrice);
+                    productCard.appendChild(productDescription);
+                    productCard.appendChild(addButton);
+                    
+                    categoryDiv.appendChild(productCard);
+                });
+                
+                categoriesContainer.appendChild(categoryDiv);
+            });
+            
+            // If no categories with products
+            if (categoriesContainer.children.length === 0) {
+                menu// If no categories with products
+                if (categoriesContainer.children.length === 0) {
+                    menuMessage.textContent = 'No menu items available';
+                    menuMessage.classList.add('error');
+                }
+            }
+        }
+
+        // Cart functions
+        function addToCart(product) {
+            // Check if product is already in cart
+            const existingItem = cart.find(item => item.id === product._id);
+            
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({
+                    id: product._id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: 1
+                });
+            }
+            
+            // Save cart to localStorage
+            localStorage.setItem('cart', JSON.stringify(cart));
+            
+            // Update cart UI
+            updateCartUI();
+            
+            // Show success message
+            const message = document.createElement('div');
+            message.className = 'message success';
+            message.textContent = `${product.name} added to your order`;
+            
+            menuMessage.innerHTML = '';
+            menuMessage.appendChild(message);
+            
+            // Clear message after 3 seconds
+            setTimeout(() => {
+                menuMessage.innerHTML = '';
+            }, 3000);
+        }
+
+        function updateCartUI() {
+            if (!cart.length) {
+                cartItems.innerHTML = '<p>Your cart is empty</p>';
+                cartTotal.textContent = 'Total: $0.00';
+                placeOrderBtn.disabled = true;
+                return;
+            }
+
+            placeOrderBtn.disabled = false;
+            cartItems.innerHTML = '';
+            
+            let total = 0;
+            
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                
+                const cartItem = document.createElement('div');
+                cartItem.className = 'cart-item';
+                
+                const itemInfo = document.createElement('div');
+                itemInfo.innerHTML = `
+                    <div><strong>${item.name}</strong></div>
+                    <div>$${item.price.toFixed(2)} × ${item.quantity}</div>
+                `;
+                
+                const itemControls = document.createElement('div');
+                itemControls.className = 'quantity-control';
+                
+                const decreaseBtn = document.createElement('button');
+                decreaseBtn.className = 'quantity-btn';
+                decreaseBtn.textContent = '-';
+                decreaseBtn.onclick = () => updateItemQuantity(item.id, -1);
+                
+                const quantity = document.createElement('span');
+                quantity.className = 'quantity';
+                quantity.textContent = item.quantity;
+                
+                const increaseBtn = document.createElement('button');
+                increaseBtn.className = 'quantity-btn';
+                increaseBtn.textContent = '+';
+                increaseBtn.onclick = () => updateItemQuantity(item.id, 1);
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'quantity-btn';
+                removeBtn.textContent = '×';
+                removeBtn.style.marginLeft = '10px';
+                removeBtn.onclick = () => removeFromCart(item.id);
+                
+                itemControls.appendChild(decreaseBtn);
+                itemControls.appendChild(quantity);
+                itemControls.appendChild(increaseBtn);
+                itemControls.appendChild(removeBtn);
+                
+                cartItem.appendChild(itemInfo);
+                cartItem.appendChild(itemControls);
+                
+                cartItems.appendChild(cartItem);
+            });
+            
+            cartTotal.textContent = `Total: $${total.toFixed(2)}`;
+        }
+
+        function updateItemQuantity(itemId, change) {
+            const item = cart.find(item => item.id === itemId);
+            
+            if (item) {
+                item.quantity += change;
+                
+                if (item.quantity <= 0) {
+                    removeFromCart(itemId);
+                } else {
+                    localStorage.setItem('cart', JSON.stringify(cart));
+                    updateCartUI();
+                }
+            }
+        }
+
+        function removeFromCart(itemId) {
+            cart = cart.filter(item => item.id !== itemId);
+            localStorage.setItem('cart', JSON.stringify(cart));
+            updateCartUI();
+        }
+
+        // Place order
+        placeOrderBtn.addEventListener('click', async () => {
+            if (!cart.length) return;
+            
+            try {
+                placeOrderBtn.disabled = true;
+                placeOrderBtn.textContent = 'Processing...';
+                
+                // Prepare order data
+                const orderItems = cart.map(item => ({
+                    productId: item.id,
+                    quantity: item.quantity,
+                    price: item.price
+                }));
+                
+                const response = await fetch(`${API_BASE_URL}/customer/order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ items: orderItems })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Clear cart
+                    cart = [];
+                    localStorage.removeItem('cart');
+                    updateCartUI();
+                    
+                    // Show success message
+                    cartMessage.textContent = 'Order placed successfully!';
+                    cartMessage.classList.add('success');
+                    cartMessage.classList.remove('error');
+                } else {
+                    cartMessage.textContent = data.message || 'Failed to place order';
+                    cartMessage.classList.add('error');
+                    cartMessage.classList.remove('success');
+                }
+            } catch (error) {
+                cartMessage.textContent = error.message || 'An error occurred';
+                cartMessage.classList.add('error');
+                cartMessage.classList.remove('success');
+            } finally {
+                placeOrderBtn.disabled = false;
+                placeOrderBtn.textContent = 'Place Order';
+            }
+        });
+
+        // Checkout from table
+        checkoutBtn.addEventListener('click', async () => {
+            try {
+                checkoutBtn.disabled = true;
+                checkoutBtn.textContent = 'Processing...';
+
+                const response = await fetch(`${API_BASE_URL}/customer/checkout`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showMessage(tableMessage, 'Successfully checked out from table');
+
+                    // Clear cart on checkout
+                    cart = [];
+                    localStorage.removeItem('cart');
+
+                    // Go back to profile after checkout
+                    setTimeout(() => {
+                        showSection(profileSection);
+                        fetchProfile();
+                    }, 1500);
+                } else {
+                    showMessage(tableMessage, data.message || 'Failed to checkout', true);
+                    checkoutBtn.disabled = false;
+                    checkoutBtn.textContent = 'Checkout from Table';
+                }
+            } catch (error) {
+                showMessage(tableMessage, error.message || 'An error occurred', true);
+                checkoutBtn.disabled = false;
+                checkoutBtn.textContent = 'Checkout from Table';
+            }
+        });
+
+        // Back to profile button
+        backToProfileBtn.addEventListener('click', () => {
+            if (qrScanner) {
+                qrScanner.stop();
+                qrScanner = null;
+            }
+            showSection(profileSection);
+        });
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            showSection(phoneSection);
+        }
+
+        // Get table ID from URL
+        function getTableIdFromUrl() {
+            // Check if we're using path parameters (/table/identifier)
+            const pathParts = window.location.pathname.split('/');
+            if (pathParts.length > 2 && pathParts[1] === 'table') {
+                return pathParts[2];
+            }
+
+            // Fallback to query parameters (?table=identifier)
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('table');
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function () {
+            // Update cart UI
+            updateCartUI();
+            
+            // Check if URL contains table parameter
+            const tableId = getTableIdFromUrl();
+            if (tableId) {
+                localStorage.setItem('pendingTableId', tableId);
+
+                // If already logged in, scan table
+                if (authToken) {
+                    scanTable(tableId);
+                } else {
+                    showSection(phoneSection);
+                    // Show message that table scan is pending login
+                    showMessage(phoneMessage, 'Please login to access table ' + tableId);
+                }
+            } else {
+                // Regular initialization
+                checkAuth();
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -7,7 +7,8 @@ const {
   scanTable,
   checkout,
   getProfile,
-  updateProfile
+  updateProfile,
+  getRestaurantMenu
 } = require('../controllers/customerAuthController');
 const { protectCustomer, activeSession } = require('../middleware/customerAuthMiddleware');
 
@@ -24,5 +25,7 @@ router.post('/scan-table/:qrCodeIdentifier', scanTable);
 
 // Protected routes - require active session
 router.post('/checkout', activeSession, checkout);
+
+router.get('/menu', protectCustomer, activeSession, getRestaurantMenu);
 
 module.exports = router;

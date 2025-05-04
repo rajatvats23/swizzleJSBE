@@ -1,8 +1,8 @@
-// Update to server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
@@ -18,7 +18,9 @@ const tagRoutes = require('./routes/tagRoutes');
 const productRoutes = require('./routes/productRoutes');
 const addonRoutes = require('./routes/addonRoutes'); 
 const tableRoutes = require('./routes/tableRoutes'); 
-const customerRoutes = require('./routes/customerRoutes'); // Add customer routes
+const customerRoutes = require('./routes/customerRoutes');
+const customerOrderRoutes = require('./routes/customerOrderRoutes');
+const staffOrderRoutes = require('./routes/staffOrderRoutes');
 
 // Create Express app
 const app = express();
@@ -26,14 +28,23 @@ const app = express();
 // Middleware for parsing JSON
 app.use(express.json());
 
+// Configure CORS specifically for React dev server
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS.split(','),
+  origin: ['http://localhost:3000', 'http://192.168.10.251:3000', 'http://localhost:4500'],  // React dev server address
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
-// Mount routes
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Special route to handle table QR code URLs
+app.get('/table/:qrCodeIdentifier', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer.html'));
+});
+
+// Mount API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/mfa', mfaRoutes);
@@ -44,14 +55,17 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/products', productRoutes); 
 app.use('/api/addons', addonRoutes);
 app.use('/api/tables', tableRoutes);
-app.use('/api/customer', customerRoutes); // Mount customer routes
+app.use('/api/customer', customerRoutes);
+app.use('/api/customer', customerOrderRoutes);
+app.use('/api/staff', staffOrderRoutes);
+
 
 // Define a simple test route
 app.get('/', (req, res) => {
   res.send('API is running...');
 });
 
-// Error handling middleware
+// Error handling middleware for 404 routes
 app.use((req, res, next) => {
   res.status(404).json({
     status: 'fail',
@@ -59,15 +73,15 @@ app.use((req, res, next) => {
   });
 });
 
-// Connect to MongoDB
+// Connect to MongoDB and start server
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
     console.log('MongoDB Connected');
     
-    // Start server
+    // Start server on all network interfaces
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT} and accessible via local network`));
   })
   .catch(err => {
     console.error('MongoDB connection error:', err.message);
