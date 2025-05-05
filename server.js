@@ -21,9 +21,13 @@ const tableRoutes = require('./routes/tableRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const customerOrderRoutes = require('./routes/customerOrderRoutes');
 const staffOrderRoutes = require('./routes/staffOrderRoutes');
+const reservationRoutes = require('./routes/reservationRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 
 // Create Express app
 const app = express();
+
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
 // Middleware for parsing JSON
 app.use(express.json());
@@ -58,6 +62,8 @@ app.use('/api/tables', tableRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/customer', customerOrderRoutes);
 app.use('/api/staff', staffOrderRoutes);
+app.use('/api/reservations', reservationRoutes);
+app.use('/api/payments', paymentRoutes);
 
 
 // Define a simple test route
