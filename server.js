@@ -23,6 +23,7 @@ const customerOrderRoutes = require('./routes/customerOrderRoutes');
 const staffOrderRoutes = require('./routes/staffOrderRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 // Create Express app
 const app = express();
@@ -64,6 +65,7 @@ app.use('/api/customer', customerOrderRoutes);
 app.use('/api/staff', staffOrderRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 
 // Define a simple test route

@@ -1,0 +1,1089 @@
+// controllers/analyticsController.js
+const Order = require('../models/orderModel');
+const Product = require('../models/productModel');
+const Table = require('../models/tableModel');
+const Customer = require('../models/customerModel');
+const { DailyRevenue } = require('../models/analyticsModel');
+const mongoose = require('mongoose');
+
+// Standardized response structure
+const sendResponse = (res, statusCode, status, message, data = null) => {
+  const response = {
+    status,
+    message
+  };
+  
+  if (data) {
+    response.data = data;
+  }
+  
+  return res.status(statusCode).json(response);
+};
+
+// 1. Daily Revenue for a date range
+const getDailyRevenue = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default to last 30 days
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Get daily revenue from pre-aggregated data
+    const revenues = await DailyRevenue.find({
+      restaurant: restaurantId,
+      date: { $gte: start, $lte: end }
+    }).sort('date');
+    
+    // For missing dates, query the orders directly
+    const missingDates = getMissingDates(revenues, start, end);
+    
+    if (missingDates.length > 0) {
+      // This part would be better handled by a scheduled job
+      // But for simplicity, we'll calculate missing dates on-demand
+      for (const date of missingDates) {
+        const nextDay = new Date(date);
+        nextDay.setDate(date.getDate() + 1);
+        
+        // Aggregate orders for the missing date
+        const dailyData = await Order.aggregate([
+          {
+            $match: {
+              restaurant: mongoose.Types.ObjectId(restaurantId),
+              createdAt: { $gte: date, $lt: nextDay },
+              status: { $in: ['completed', 'delivered'] }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalRevenue: { $sum: '$totalAmount' },
+              orderCount: { $count: {} },
+              cash: { 
+                $sum: { 
+                  $cond: [{ $eq: ['$paymentMethod', 'cash'] }, 1, 0] 
+                } 
+              },
+              card: { 
+                $sum: { 
+                  $cond: [{ $eq: ['$paymentMethod', 'card'] }, 1, 0] 
+                } 
+              },
+              online: { 
+                $sum: { 
+                  $cond: [{ $eq: ['$paymentMethod', 'online'] }, 1, 0] 
+                } 
+              }
+            }
+          }
+        ]);
+        
+        if (dailyData.length > 0) {
+          const data = dailyData[0];
+          const averageOrderValue = data.orderCount > 0 ? data.totalRevenue / data.orderCount : 0;
+          
+          // Create new daily revenue record
+          const newDailyRevenue = new DailyRevenue({
+            date,
+            restaurant: restaurantId,
+            totalRevenue: data.totalRevenue,
+            orderCount: data.orderCount,
+            averageOrderValue,
+            paymentMethods: {
+              cash: data.cash,
+              card: data.card,
+              online: data.online
+            }
+          });
+          
+          await newDailyRevenue.save();
+          revenues.push(newDailyRevenue);
+        } else {
+          // No orders for this day, create an empty record
+          const emptyRevenue = new DailyRevenue({
+            date,
+            restaurant: restaurantId,
+            totalRevenue: 0,
+            orderCount: 0,
+            averageOrderValue: 0,
+            paymentMethods: { cash: 0, card: 0, online: 0 }
+          });
+          
+          await emptyRevenue.save();
+          revenues.push(emptyRevenue);
+        }
+      }
+      
+      // Resort the array after adding new items
+      revenues.sort((a, b) => a.date - b.date);
+    }
+    
+    return sendResponse(res, 200, 'success', 'Daily revenue retrieved successfully', { revenues });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 2. Top Selling Items
+const getTopSellingItems = async (req, res) => {
+  try {
+    const { startDate, endDate, limit = 10 } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Aggregate top selling items
+    const topItems = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'orderitems',
+          localField: 'items',
+          foreignField: '_id',
+          as: 'itemDetails'
+        }
+      },
+      { $unwind: '$itemDetails' },
+      {
+        $group: {
+          _id: '$itemDetails.product',
+          totalQuantity: { $sum: '$itemDetails.quantity' },
+          totalRevenue: { $sum: { $multiply: ['$itemDetails.price', '$itemDetails.quantity'] } },
+          orderCount: { $sum: 1 }
+        }
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'productDetails'
+        }
+      },
+      { $unwind: '$productDetails' },
+      {
+        $project: {
+          _id: 1,
+          productName: '$productDetails.name',
+          productImage: '$productDetails.imageUrl',
+          totalQuantity: 1,
+          totalRevenue: 1,
+          orderCount: 1,
+          averageOrderQuantity: { $divide: ['$totalQuantity', '$orderCount'] }
+        }
+      },
+      { $sort: { totalQuantity: -1 } },
+      { $limit: parseInt(limit) }
+    ]);
+    
+    return sendResponse(res, 200, 'success', 'Top selling items retrieved successfully', { topItems });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 3. Average Order Value Trend
+const getAverageOrderValue = async (req, res) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Define date grouping format based on groupBy parameter
+    let dateFormat;
+    if (groupBy === 'month') {
+      dateFormat = { $dateToString: { format: '%Y-%m', date: '$createdAt' } };
+    } else if (groupBy === 'week') {
+      dateFormat = { 
+        $dateToString: { 
+          format: '%Y-%U', // ISO week number
+          date: '$createdAt' 
+        } 
+      };
+    } else {
+      // default to day
+      dateFormat = { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
+    }
+    
+    // Aggregate average order value
+    const avgOrderValues = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      {
+        $group: {
+          _id: dateFormat,
+          totalRevenue: { $sum: '$totalAmount' },
+          orderCount: { $count: {} },
+          averageOrderValue: { $avg: '$totalAmount' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    return sendResponse(res, 200, 'success', 'Average order value trend retrieved successfully', { avgOrderValues });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 4. Table Occupancy Rate
+const getTableOccupancy = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate date
+    const targetDate = date ? new Date(date) : new Date();
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const nextDay = new Date(targetDate);
+    nextDay.setDate(targetDate.getDate() + 1);
+    
+    // Get total tables
+    const totalTables = await Table.countDocuments({ restaurantId });
+    
+    // Get table sessions for the day
+    const tableSessions = await Customer.aggregate([
+      {
+        $match: {
+          'visitHistory.restaurant': mongoose.Types.ObjectId(restaurantId),
+          'visitHistory.visitDate': { $gte: targetDate, $lt: nextDay }
+        }
+      },
+      { $unwind: '$visitHistory' },
+      {
+        $match: {
+          'visitHistory.restaurant': mongoose.Types.ObjectId(restaurantId),
+          'visitHistory.visitDate': { $gte: targetDate, $lt: nextDay }
+        }
+      },
+      {
+        $group: {
+          _id: '$visitHistory.table',
+          sessionCount: { $sum: 1 }
+        }
+      }
+    ]);
+    
+    // Calculate occupancy stats
+    const tablesUsed = tableSessions.length;
+    const occupancyRate = totalTables > 0 ? (tablesUsed / totalTables) * 100 : 0;
+    
+    // Get hourly occupancy
+    const hourlyOccupancy = await Customer.aggregate([
+      {
+        $match: {
+          'visitHistory.restaurant': mongoose.Types.ObjectId(restaurantId),
+          'visitHistory.visitDate': { $gte: targetDate, $lt: nextDay }
+        }
+      },
+      { $unwind: '$visitHistory' },
+      {
+        $match: {
+          'visitHistory.restaurant': mongoose.Types.ObjectId(restaurantId),
+          'visitHistory.visitDate': { $gte: targetDate, $lt: nextDay }
+        }
+      },
+      {
+        $group: {
+          _id: { $hour: '$visitHistory.visitDate' },
+          tableCount: { $addToSet: '$visitHistory.table' }
+        }
+      },
+      {
+        $project: {
+          hour: '$_id',
+          tableCount: { $size: '$tableCount' },
+          occupancyRate: { 
+            $multiply: [
+              { $divide: [{ $size: '$tableCount' }, totalTables] },
+              100
+            ]
+          }
+        }
+      },
+      { $sort: { hour: 1 } }
+    ]);
+    
+    return sendResponse(res, 200, 'success', 'Table occupancy data retrieved successfully', {
+      date: targetDate,
+      totalTables,
+      tablesUsed,
+      occupancyRate,
+      hourlyOccupancy
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 5. Peak Hours Analysis
+const getPeakHours = async (req, res) => {
+  try {
+    const { startDate, endDate, dayOfWeek } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Build match conditions
+    const matchConditions = {
+      restaurant: mongoose.Types.ObjectId(restaurantId),
+      createdAt: { $gte: start, $lte: end }
+    };
+    
+    // Filter by day of week if specified
+    if (dayOfWeek !== undefined && dayOfWeek !== null) {
+      const day = parseInt(dayOfWeek);
+      if (!isNaN(day) && day >= 0 && day <= 6) {
+        matchConditions.$expr = { $eq: [{ $dayOfWeek: '$createdAt' }, day + 1] }; // MongoDB dayOfWeek is 1-7
+      }
+    }
+    
+    // Aggregate hourly order data
+    const hourlyOrders = await Order.aggregate([
+      { $match: matchConditions },
+      {
+        $group: {
+          _id: { 
+            hour: { $hour: '$createdAt' },
+            dayOfWeek: { $dayOfWeek: '$createdAt' } // 1 for Sunday, 2 for Monday, etc.
+          },
+          orderCount: { $sum: 1 },
+          totalRevenue: { $sum: '$totalAmount' }
+        }
+      },
+      { $sort: { '_id.dayOfWeek': 1, '_id.hour': 1 } }
+    ]);
+    
+    // Transform to more readable format
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const formattedHourlyData = hourlyOrders.map(item => ({
+      hour: item._id.hour,
+      dayOfWeek: daysOfWeek[item._id.dayOfWeek - 1],
+      dayOfWeekNum: item._id.dayOfWeek - 1,
+      orderCount: item.orderCount,
+      totalRevenue: item.totalRevenue
+    }));
+    
+    // Get overall peak hours regardless of day
+    const peakHours = await Order.aggregate([
+      { 
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: { $hour: '$createdAt' },
+          orderCount: { $sum: 1 },
+          totalRevenue: { $sum: '$totalAmount' }
+        }
+      },
+      { $sort: { orderCount: -1 } }
+    ]);
+    
+    return sendResponse(res, 200, 'success', 'Peak hours analysis retrieved successfully', {
+      hourlyData: formattedHourlyData,
+      peakHours: peakHours.map(h => ({
+        hour: h._id,
+        orderCount: h.orderCount,
+        totalRevenue: h.totalRevenue
+      }))
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 6. Order Fulfillment Time
+const getOrderFulfillmentTime = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // To calculate fulfillment time, we need orders with proper status transitions
+    // This assumes your Order model tracks status change timestamps
+    const orderTimes = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['delivered', 'completed'] }
+        }
+      },
+      {
+        $project: {
+          orderId: '$_id',
+          placedAt: '$createdAt',
+          completedAt: '$updatedAt',
+          // Calculate time difference in minutes
+          fulfillmentTime: {
+            $divide: [
+              { $subtract: ['$updatedAt', '$createdAt'] },
+              60000 // Convert ms to minutes
+            ]
+          }
+        }
+      },
+      // Filter out any invalid negative times
+      {
+        $match: {
+          fulfillmentTime: { $gt: 0 }
+        }
+      },
+      { $sort: { placedAt: 1 } }
+    ]);
+    
+    // Calculate average fulfillment time
+    const totalOrders = orderTimes.length;
+    const totalFulfillmentTime = orderTimes.reduce((sum, order) => sum + order.fulfillmentTime, 0);
+    const averageFulfillmentTime = totalOrders > 0 ? totalFulfillmentTime / totalOrders : 0;
+    
+    // Get daily average fulfillment times
+    const dailyFulfillmentTimes = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['delivered', 'completed'] }
+        }
+      },
+      {
+        $project: {
+          date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          fulfillmentTime: {
+            $divide: [
+              { $subtract: ['$updatedAt', '$createdAt'] },
+              60000 // Convert ms to minutes
+            ]
+          }
+        }
+      },
+      {
+        $match: {
+          fulfillmentTime: { $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: '$date',
+          averageFulfillmentTime: { $avg: '$fulfillmentTime' },
+          orderCount: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    return sendResponse(res, 200, 'success', 'Order fulfillment time data retrieved successfully', {
+      averageFulfillmentTime,
+      totalOrders,
+      orderTimes,
+      dailyFulfillmentTimes
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 7. Customer Return Rate
+const getCustomerReturnRate = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // 90 days for meaningful return rate
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Find all customers who visited the restaurant in the time period
+    const customerVisits = await Customer.aggregate([
+      {
+        $match: {
+          'visitHistory.restaurant': mongoose.Types.ObjectId(restaurantId),
+          'visitHistory.visitDate': { $gte: start, $lte: end }
+        }
+      },
+      { $unwind: '$visitHistory' },
+      {
+        $match: {
+          'visitHistory.restaurant': mongoose.Types.ObjectId(restaurantId),
+          'visitHistory.visitDate': { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id',
+          visitCount: { $sum: 1 },
+          firstVisit: { $min: '$visitHistory.visitDate' },
+          lastVisit: { $max: '$visitHistory.visitDate' },
+          phoneNumber: { $first: '$phoneNumber' },
+          name: { $first: '$name' }
+        }
+      }
+    ]);
+    
+    // Calculate customer metrics
+    const totalCustomers = customerVisits.length;
+    const customersWithMultipleVisits = customerVisits.filter(c => c.visitCount > 1).length;
+    const returnRate = totalCustomers > 0 ? (customersWithMultipleVisits / totalCustomers) * 100 : 0;
+    
+    // Group by visit count
+    const visitCountDistribution = [];
+    const visitCounts = {};
+    customerVisits.forEach(customer => {
+      const count = customer.visitCount;
+      visitCounts[count] = (visitCounts[count] || 0) + 1;
+    });
+    
+    Object.keys(visitCounts).forEach(count => {
+      visitCountDistribution.push({
+        visitCount: parseInt(count),
+        customerCount: visitCounts[count],
+        percentage: (visitCounts[count] / totalCustomers) * 100
+      });
+    });
+    
+    // Sort by visit count
+    visitCountDistribution.sort((a, b) => a.visitCount - b.visitCount);
+    
+    return sendResponse(res, 200, 'success', 'Customer return rate data retrieved successfully', {
+      totalCustomers,
+      returningSustomers: customersWithMultipleVisits,
+      returnRate,
+      visitCountDistribution,
+      // Limit customerList for privacy and performance
+      customerList: customerVisits.slice(0, 100).map(c => ({
+        id: c._id,
+        phoneNumber: c.phoneNumber,
+        name: c.name || 'Unknown',
+        visitCount: c.visitCount
+      }))
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 8. Menu Category Performance
+const getCategoryPerformance = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Aggregate sales by category
+    const categoryPerformance = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'orderitems',
+          localField: 'items',
+          foreignField: '_id',
+          as: 'itemDetails'
+        }
+      },
+      { $unwind: '$itemDetails' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'itemDetails.product',
+          foreignField: '_id',
+          as: 'productDetails'
+        }
+      },
+      { $unwind: '$productDetails' },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'productDetails.category',
+          foreignField: '_id',
+          as: 'categoryDetails'
+        }
+      },
+      { $unwind: '$categoryDetails' },
+      {
+        $group: {
+          _id: '$categoryDetails._id',
+          categoryName: { $first: '$categoryDetails.name' },
+          totalRevenue: { $sum: { $multiply: ['$itemDetails.price', '$itemDetails.quantity'] } },
+          orderCount: { $sum: 1 },
+          itemCount: { $sum: '$itemDetails.quantity' }
+        }
+      },
+      {
+        $sort: { totalRevenue: -1 }
+      }
+    ]);
+    
+    // Calculate total revenue across all categories
+    const totalRevenue = categoryPerformance.reduce((sum, cat) => sum + cat.totalRevenue, 0);
+    
+    // Add percentage of total
+    const categoriesWithPercentage = categoryPerformance.map(cat => ({
+      ...cat,
+      percentage: totalRevenue > 0 ? (cat.totalRevenue / totalRevenue) * 100 : 0
+    }));
+    
+    return sendResponse(res, 200, 'success', 'Category performance data retrieved successfully', {
+      totalRevenue,
+      categories: categoriesWithPercentage
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 9. Payment Method Distribution
+const getPaymentMethodDistribution = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // Aggregate payment methods
+    const paymentMethods = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['completed', 'delivered'] },
+          isPaid: true
+        }
+      },
+      {
+        $group: {
+          _id: '$paymentMethod',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$totalAmount' }
+        }
+      }
+    ]);
+    
+    // Calculate total and add percentages
+    const totalOrders = paymentMethods.reduce((sum, method) => sum + method.count, 0);
+    const totalAmount = paymentMethods.reduce((sum, method) => sum + method.totalAmount, 0);
+    
+    const formattedPaymentMethods = paymentMethods.map(method => ({
+      method: method._id || 'unknown',
+      count: method.count,
+      totalAmount: method.totalAmount,
+      orderPercentage: totalOrders > 0 ? (method.count / totalOrders) * 100 : 0,
+      amountPercentage: totalAmount > 0 ? (method.totalAmount / totalAmount) * 100 : 0
+    }));
+    
+    // Daily trend of payment methods
+    const dailyPaymentTrend = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end },
+          status: { $in: ['completed', 'delivered'] },
+          isPaid: true
+        }
+      },
+      {
+        $group: {
+          _id: {
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            method: '$paymentMethod'
+          },
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$totalAmount' }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+    
+    // Transform daily trend to a more usable format
+    const dailyTrendByDate = {};
+    dailyPaymentTrend.forEach(item => {
+      const date = item._id.date;
+      const method = item._id.method || 'unknown';
+      
+      if (!dailyTrendByDate[date]) {
+        dailyTrendByDate[date] = {};
+      }
+      
+      dailyTrendByDate[date][method] = {
+        count: item.count,
+        amount: item.totalAmount
+      };
+    });
+    
+    // Convert to array for easier frontend consumption
+    const dailyTrend = Object.keys(dailyTrendByDate).map(date => ({
+      date,
+      methods: dailyTrendByDate[date]
+    }));
+    
+    return sendResponse(res, 200, 'success', 'Payment method distribution retrieved successfully', {
+      totalOrders,
+      totalAmount,
+      paymentMethods: formattedPaymentMethods,
+      dailyTrend
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// 10. Staff Order Processing Rate
+const getStaffPerformance = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const restaurantId = req.user.restaurantId;
+    
+    // Validate dates
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    // This assumes you've added a 'statusUpdatedBy' field to your OrderItem model
+    // If not, you'll need to modify your order status update logic to track which staff member processed each order
+    const staffPerformance = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'orderitems',
+          localField: 'items',
+          foreignField: '_id',
+          as: 'itemDetails'
+        }
+      },
+      { $unwind: '$itemDetails' },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'itemDetails.statusUpdatedBy',
+          foreignField: '_id',
+          as: 'staffDetails'
+        }
+      },
+      { $unwind: '$staffDetails' },
+      {
+        $group: {
+          _id: '$staffDetails._id',
+          staffName: { 
+            $first: { 
+              $concat: ['$staffDetails.firstName', ' ', '$staffDetails.lastName'] 
+            } 
+          },
+          orderCount: { $sum: 1 },
+          itemsProcessed: { $sum: 1 },
+          // Calculate average processing time in minutes
+          avgProcessingTime: { 
+            $avg: { 
+              $divide: [
+                { $subtract: ['$itemDetails.updatedAt', '$createdAt'] },
+                60000 // Convert ms to minutes
+              ]
+            } 
+          }
+        }
+      },
+      { $sort: { itemsProcessed: -1 } }
+    ]);
+    
+    // Get daily staff performance for trend analysis
+    const dailyStaffPerformance = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'orderitems',
+          localField: 'items',
+          foreignField: '_id',
+          as: 'itemDetails'
+        }
+      },
+      { $unwind: '$itemDetails' },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'itemDetails.statusUpdatedBy',
+          foreignField: '_id',
+          as: 'staffDetails'
+        }
+      },
+      { $unwind: '$staffDetails' },
+      {
+        $group: {
+          _id: {
+            staffId: '$staffDetails._id',
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }
+          },
+          staffName: { 
+            $first: { 
+              $concat: ['$staffDetails.firstName', ' ', '$staffDetails.lastName'] 
+            } 
+          },
+          itemsProcessed: { $sum: 1 },
+          avgProcessingTime: { 
+            $avg: { 
+              $divide: [
+                { $subtract: ['$itemDetails.updatedAt', '$createdAt'] },
+                60000 // Convert ms to minutes
+              ]
+            } 
+          }
+        }
+      },
+      { $sort: { '_id.date': 1 } }
+    ]);
+    
+    return sendResponse(res, 200, 'success', 'Staff performance data retrieved successfully', {
+      staffPerformance,
+      dailyStaffPerformance
+    });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+// Helper function to get missing dates
+function getMissingDates(revenueData, startDate, endDate) {
+  const missingDates = [];
+  const existingDates = new Set(revenueData.map(r => r.date.toISOString().split('T')[0]));
+  
+  const currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    if (!existingDates.has(dateStr)) {
+      missingDates.push(new Date(currentDate));
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  return missingDates;
+}
+
+// Dashboard Summary - Get key metrics for dashboard
+const getDashboardSummary = async (req, res) => {
+  try {
+    const restaurantId = req.user.restaurantId;
+    
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    
+    // Get yesterday's date range
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    
+    // Last 7 days
+    const lastWeekStart = new Date(today);
+    lastWeekStart.setDate(today.getDate() - 7);
+    
+    // Last 30 days
+    const lastMonthStart = new Date(today);
+    lastMonthStart.setDate(today.getDate() - 30);
+    
+    // Get today's revenue
+    const todayRevenue = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: today, $lt: tomorrow },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalAmount' },
+          orderCount: { $count: {} }
+        }
+      }
+    ]);
+    
+    // Get yesterday's revenue for comparison
+    const yesterdayRevenue = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: yesterday, $lt: today },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalAmount' },
+          orderCount: { $count: {} }
+        }
+      }
+    ]);
+    
+    // Get weekly revenue
+    const weeklyRevenue = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: lastWeekStart, $lt: tomorrow },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalAmount' },
+          orderCount: { $count: {} }
+        }
+      }
+    ]);
+    
+    // Get monthly revenue
+    const monthlyRevenue = await Order.aggregate([
+      {
+        $match: {
+          restaurant: mongoose.Types.ObjectId(restaurantId),
+          createdAt: { $gte: lastMonthStart, $lt: tomorrow },
+          status: { $in: ['completed', 'delivered'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalAmount' },
+          orderCount: { $count: {} }
+        }
+      }
+    ]);
+    
+    // Get today's active tables
+    const activeTables = await Table.countDocuments({
+      restaurantId,
+      status: 'Occupied'
+    });
+    
+    // Get total tables
+    const totalTables = await Table.countDocuments({ restaurantId });
+    
+    // Get pending orders
+    const pendingOrders = await Order.countDocuments({
+      restaurant: restaurantId,
+      status: { $nin: ['completed', 'delivered'] }
+    });
+    
+    // Format results
+    const summary = {
+      todayRevenue: todayRevenue.length > 0 ? todayRevenue[0].totalRevenue : 0,
+      todayOrders: todayRevenue.length > 0 ? todayRevenue[0].orderCount : 0,
+      yesterdayRevenue: yesterdayRevenue.length > 0 ? yesterdayRevenue[0].totalRevenue : 0,
+      yesterdayOrders: yesterdayRevenue.length > 0 ? yesterdayRevenue[0].orderCount : 0,
+      weeklyRevenue: weeklyRevenue.length > 0 ? weeklyRevenue[0].totalRevenue : 0,
+      weeklyOrders: weeklyRevenue.length > 0 ? weeklyRevenue[0].orderCount : 0,
+      monthlyRevenue: monthlyRevenue.length > 0 ? monthlyRevenue[0].totalRevenue : 0,
+      monthlyOrders: monthlyRevenue.length > 0 ? monthlyRevenue[0].orderCount : 0,
+      activeTables,
+      totalTables,
+      tableOccupancyRate: totalTables > 0 ? (activeTables / totalTables) * 100 : 0,
+      pendingOrders
+    };
+    
+    // Calculate change percentages
+    summary.revenueChangeDaily = summary.yesterdayRevenue > 0 
+      ? ((summary.todayRevenue - summary.yesterdayRevenue) / summary.yesterdayRevenue) * 100
+      : 0;
+    
+    summary.ordersChangeDaily = summary.yesterdayOrders > 0
+      ? ((summary.todayOrders - summary.yesterdayOrders) / summary.yesterdayOrders) * 100
+      : 0;
+    
+    return sendResponse(res, 200, 'success', 'Dashboard summary retrieved successfully', { summary });
+  } catch (error) {
+    return sendResponse(res, 500, 'error', 'Server error', { error: error.message });
+  }
+};
+
+module.exports = {
+  getDailyRevenue,
+  getTopSellingItems,
+  getAverageOrderValue,
+  getTableOccupancy,
+  getPeakHours,
+  getOrderFulfillmentTime,
+  getCustomerReturnRate,
+  getCategoryPerformance,
+  getPaymentMethodDistribution,
+  getStaffPerformance,
+  getDashboardSummary
+};
