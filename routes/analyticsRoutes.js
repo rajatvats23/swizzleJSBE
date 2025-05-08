@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getDashboardSummary,
   getDailyRevenue,
   getTopSellingItems,
   getAverageOrderValue,
@@ -10,9 +11,7 @@ const {
   getOrderFulfillmentTime,
   getCustomerReturnRate,
   getCategoryPerformance,
-  getPaymentMethodDistribution,
-  getStaffPerformance,
-  getDashboardSummary
+  getPaymentMethodDistribution
 } = require('../controllers/analyticsController');
 const { protect, restrictTo } = require('../middleware/authMiddleware');
 
@@ -40,8 +39,5 @@ router.get('/category-performance', getCategoryPerformance);
 
 // Financial analytics
 router.get('/payment-method-distribution', getPaymentMethodDistribution);
-
-// Staff analytics
-router.get('/staff-performance', restrictTo('superadmin', 'admin', 'manager'), getStaffPerformance);
 
 module.exports = router;
